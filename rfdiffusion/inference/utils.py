@@ -511,6 +511,9 @@ def sampler_selector(conf: DictConfig):
             sampler = model_runners.SelfConditioning(conf)
         elif conf.inference.model_runner == "ScaffoldedSampler":
             sampler = model_runners.ScaffoldedSampler(conf)
+        elif conf.inference.model_runner == "OneShotSampler":
+            sampler = model_runners.OneShotSampler(conf)
+            conf.inference.output_prefix = f"./{conf.inference.input_pdb.split('/')[-1].replace('.pdb','_oneshot')}"
         else:
             raise ValueError(f"Unrecognized sampler {conf.model_runner}")
     return sampler

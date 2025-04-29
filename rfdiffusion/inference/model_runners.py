@@ -271,6 +271,10 @@ class Sampler:
         ################################
         ### Generate specific contig ###
         ################################
+        
+        if self.inf_conf.model_runner == 'OneShotSampler':
+            self.contig_conf.contigs = [f"{self.target_feats['pdb_idx'][-1][1]}-{self.target_feats['pdb_idx'][-1][1]}"]
+        
 
         # Generate a specific contig from the range of possibilities specified at input
 
@@ -972,3 +976,74 @@ class ScaffoldedSampler(SelfConditioning):
             idx_pdb[:,self.binderlen:] += 200
 
         return msa_masked, msa_full, seq, xyz_prev, idx_pdb, t1d, t2d, xyz_t, alpha_t
+
+class OneShotSampler(Sampler):
+    """
+    Model Runner for finetuned rosettafold
+    Input pdb is provided as a template input to the model at time 1
+    """
+
+    def sample_step(self, *, t, x_t, seq_init, final_step):
+        '''
+        Generate the next pose that the model should be supplied at timestep t-1.
+        Args:
+            t (int): The timestep that has just been predicted
+            seq_t (torch.tensor): (L,22) The sequence at the beginning of this timestep
+            x_t (torch.tensor): (L,14,3) The residue positions at the beginning of this timestep
+            seq_init (torch.tensor): (L,22) The initialized sequence used in updating the sequence.
+        Returns:
+            px0: (L,14,3) The model's prediction of x0.
+            x_t_1: (L,14,3) The updated positions of the next step.
+            seq_t_1: (L) The sequence to the next step (== seq_init)
+            plddt: (L, 1) Predicted lDDT of x0.
+        '''
+
+        msa_masked, msa_full, seq_in, xt_in, idx_pdb, t1d, t2d, xyz_t, alpha_t = self._preprocess(
+            seq_init, x_t, t)
+        B,N,L = xyz_t.shape[:3]
+
+        ##################################
+        ######## Str Self Cond ###########
+        ##################################
+        xyz_t = torch.zeros_like(xyz_t)
+        t2d_44   = torch.zeros_like(t2d[...,:44])
+
+        # No effect if t2d is only dim 44
+        t2d[...,:44] = t2d_44
+        
+        ####################
+        ### Forward Pass ###
+        ####################
+        
+        with torch.no_grad():
+            msa_prev, pair_prev, px0, state_prev, alpha, logits, plddt = self.model(msa_masked,
+                                msa_full,
+                                seq_in,
+                                xt_in,
+                                idx_pdb,
+                                t1d=t1d,
+                                t2d=t2d,
+                                xyz_t=xyz_t,
+                                alpha_t=alpha_t,
+                                msa_prev = None,
+                                pair_prev = None,
+                                state_prev = None,
+                                t=torch.tensor(t),
+                                return_infer=True,
+                                motif_mask=self.diffusion_mask.squeeze().to(self.device))   
+        
+        self.prev_pred = torch.clone(px0)
+        
+        # prediction of X0
+        _, px0  = self.allatom(torch.argmax(seq_in, dim=-1), px0, alpha)
+        px0    = px0.squeeze()[:,:14]
+        
+        ###########################
+        ### Generate Next Input ###
+        ###########################
+        
+        seq_t_1 = torch.clone(seq_init)
+        x_t_1 = torch.clone(px0).to(x_t.device)
+        px0 = px0.to(x_t.device)
+        
+        return px0, x_t_1, seq_t_1, plddt
