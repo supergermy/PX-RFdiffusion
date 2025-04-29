@@ -112,6 +112,12 @@ class PotentialManager:
             for setting in setting_list:
                 if setting['type'] in potentials.require_binderlen:
                     setting.update(binderlen_update)
+                    
+                if setting['type'] in potentials.require_target_pdb_path:
+                    setting['target_pdb_path'] = self.inference_config.input_pdb
+
+                if setting['type'] in potentials.require_voxel_path:
+                    setting['voxel_path'] = self.inference_config.voxel_path
 
         self.potentials_to_apply = self.initialize_all_potentials(setting_list)
         self.T = diffuser_config.T
@@ -134,7 +140,7 @@ class PotentialManager:
         setting_dict = {entry.split(':')[0]:entry.split(':')[1] for entry in potstr.split(',')}
 
         for key in setting_dict:
-            if not key == 'type': setting_dict[key] = float(setting_dict[key])
+            if key not in ['type','target_X','voxel_path','target_pdb_path']: setting_dict[key] = float(setting_dict[key])
 
         return setting_dict
 
