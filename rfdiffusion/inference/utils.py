@@ -613,12 +613,16 @@ def parse_pdb_lines(lines, parse_hetatom=False, ignore_het_h=True):
     return out
 
 
-def process_target(pdb_path, parse_hetatom=False, center=True):
+def process_target(pdb_path, parse_hetatom=False, center=True, voxel_center=None):
     # Read target pdb and extract features.
     target_struct = parse_pdb(pdb_path, parse_hetatom=parse_hetatom)
 
     # Zero-center positions
     ca_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True)
+    
+    if voxel_center:
+        ca_center = voxel_center
+    
     if not center:
         ca_center = 0
     xyz = torch.from_numpy(target_struct["xyz"] - ca_center)

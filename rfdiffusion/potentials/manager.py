@@ -140,7 +140,7 @@ class PotentialManager:
         setting_dict = {entry.split(':')[0]:entry.split(':')[1] for entry in potstr.split(',')}
 
         for key in setting_dict:
-            if key not in ['type','target_X','voxel_path','target_pdb_path']: setting_dict[key] = float(setting_dict[key])
+            if key not in ['type','centered','voxel_path','target_pdb_path']: setting_dict[key] = float(setting_dict[key])
 
         return setting_dict
 

@@ -2,6 +2,8 @@ import torch
 from rfdiffusion.util import generate_Cbeta
 from rfdiffusion.inference import utils as iu
 from rfdiffusion.voxel.Voxel import VoxelGrid
+import numpy as np
+from scipy.sparse.csgraph import shortest_path
 
 class Potential:
     '''
@@ -547,9 +549,10 @@ class monomer_shell_ncontacts(Potential):
         d_0=1,
         r_0=10, 
         cutoff=0,
+        centered=True,
     ):
         self.weight=weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff)
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
         self.r_0 = r_0
         self.d_0 = d_0
@@ -710,9 +713,10 @@ class shell_nearest_monomer_distance(Potential):
         voxel_path,
         resolution=1,
         cutoff=0,
+        centered=True,
     ):
         self.weight = weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff)
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
         
     def compute(self, xyz):
@@ -895,125 +899,123 @@ class shell_nearest_binder_distance(Potential):
 #         print(f"GW distance={D_w}")
 #         return - self.weight * D_w
 
-# class monomer_shape(Potential):
-#     def __init__(
-#         self,
-#         monomerlen,
-#         weight,
-#         target_X,
-#         step: int
-#     ):
-#         target_X = VoxelGrid(target_X, step=int(step), threshold=0).target_X
-#         if torch.is_tensor(target_X):
-#             target_X = target_X.cpu().data.numpy()
+class monomer_shape(Potential):
+    def __init__(
+        self,
+        monomerlen,
+        weight,
+        voxel_path,
+        resolution=1,
+        cutoff=0,
+    ):
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, shell=False)
+        self.core = self.voxel.target_xyzs
             
-#         self.monomerlen = int(monomerlen)
-#         self.weight = weight
-#         self._map_gw_coupling_ideal_glob(target_X, self.monomerlen)
+        self.monomerlen = int(monomerlen)
+        self.weight = weight
+        self._map_gw_coupling_ideal_glob(self.core, self.monomerlen)
         
-#         target_X = torch.Tensor(target_X)
-#         self.target_X = target_X[None, ...].clone().detach()
-#         print(self.target_X.shape)
+        self.core = torch.Tensor(self.core)
+        self.core = self.core[None, ...].clone().detach()
     
-#     def optimize_couplings_sinkhorn(self, C, scale=1.0, iterations=10):
-#         log_T = -C * scale
+    def optimize_couplings_sinkhorn(self, C, scale=1.0, iterations=10):
+        log_T = -C * scale
 
-#         # Initialize normalizers
-#         B, I, J = log_T.shape
-#         log_u = torch.zeros((B, I), device=log_T.device)
-#         log_v = torch.zeros((B, J), device=log_T.device)
-#         log_a = log_u - np.log(I)
-#         log_b = log_v - np.log(J)
+        # Initialize normalizers
+        B, I, J = log_T.shape
+        log_u = torch.zeros((B, I), device=log_T.device)
+        log_v = torch.zeros((B, J), device=log_T.device)
+        log_a = log_u - np.log(I)
+        log_b = log_v - np.log(J)
 
-#         # Iterate normalizers
-#         for j in range(iterations):
-#             log_u = log_a - torch.logsumexp(log_T + log_v.unsqueeze(1), 2)
-#             log_v = log_b - torch.logsumexp(log_T + log_u.unsqueeze(2), 1)
-#         log_T = log_T + log_v.unsqueeze(1) + log_u.unsqueeze(2)
-#         T = torch.exp(log_T)
-#         return T
+        # Iterate normalizers
+        for j in range(iterations):
+            log_u = log_a - torch.logsumexp(log_T + log_v.unsqueeze(1), 2)
+            log_v = log_b - torch.logsumexp(log_T + log_u.unsqueeze(2), 1)
+        log_T = log_T + log_v.unsqueeze(1) + log_u.unsqueeze(2)
+        T = torch.exp(log_T)
+        return T
     
-#     def optimize_couplings_gw(
-#         self, D_a, D_b, scale=200.0, iterations_outer=30,
-#     ):
-#         # Gromov-Wasserstein Distance
-#         N_a = D_a.shape[1]
-#         N_b = D_b.shape[1]
-#         p_a = torch.ones_like(D_a[:, :, 0]) / N_a
-#         p_b = torch.ones_like(D_b[:, :, 0]) / N_b
-#         C_ab = (
-#             torch.einsum("bij,bj->bi", D_a ** 2, p_a)[:, :, None]
-#             + torch.einsum("bij,bj->bi", D_b ** 2, p_b)[:, None, :]
-#         )
-#         T_gw = torch.einsum("bi,bj->bij", p_a, p_b)
-#         for i in range(iterations_outer):
-#             cost = C_ab - 2.0 * torch.einsum("bik,bkl,blj->bij", D_a, T_gw, D_b)
-#             T_gw = self.optimize_couplings_sinkhorn(cost, scale)
+    def optimize_couplings_gw(
+        self, D_a, D_b, scale=200.0, iterations_outer=30,
+    ):
+        # Gromov-Wasserstein Distance
+        N_a = D_a.shape[1]
+        N_b = D_b.shape[1]
+        p_a = torch.ones_like(D_a[:, :, 0]) / N_a
+        p_b = torch.ones_like(D_b[:, :, 0]) / N_b
+        C_ab = (
+            torch.einsum("bij,bj->bi", D_a ** 2, p_a)[:, :, None]
+            + torch.einsum("bij,bj->bi", D_b ** 2, p_b)[:, None, :]
+        )
+        T_gw = torch.einsum("bi,bj->bij", p_a, p_b)
+        for i in range(iterations_outer):
+            cost = C_ab - 2.0 * torch.einsum("bik,bkl,blj->bij", D_a, T_gw, D_b)
+            T_gw = self.optimize_couplings_sinkhorn(cost, scale)
 
-#         # Compute cost
-#         cost = C_ab - 2.0 * torch.einsum("bik,bkl,blj->bij", D_a, T_gw, D_b)
-#         D_gw = (T_gw * cost).sum([-1, -2]).abs().sqrt()
-#         return T_gw, D_gw
+        # Compute cost
+        cost = C_ab - 2.0 * torch.einsum("bik,bkl,blj->bij", D_a, T_gw, D_b)
+        D_gw = (T_gw * cost).sum([-1, -2]).abs().sqrt()
+        return T_gw, D_gw
     
-#     def _map_gw_coupling_ideal_glob(self, target_X, monomerlen):
-#         target_X = torch.Tensor(target_X).float().unsqueeze(0).to('cuda')
+    def _map_gw_coupling_ideal_glob(self, target_X, monomerlen):
+        target_X = torch.Tensor(target_X).float().unsqueeze(0).to('cuda')
         
-#         # chain_ix = torch.arange(4 * monomerlen, device='cuda') / 4.0
-#         chain_ix = torch.arange(monomerlen, device='cuda')
-#         distance_1D = (chain_ix[None, :, None] - chain_ix[None, None, :]).abs()
-#         D_model = 7.21 * distance_1D**0.322
-#         D_model = D_model / D_model.mean([1, 2], keepdim=True)
+        # chain_ix = torch.arange(4 * monomerlen, device='cuda') / 4.0
+        chain_ix = torch.arange(monomerlen, device='cuda')
+        distance_1D = (chain_ix[None, :, None] - chain_ix[None, None, :]).abs()
+        D_model = 7.21 * distance_1D**0.322
+        D_model = D_model / D_model.mean([1, 2], keepdim=True)
         
-#         D_target = self._distance_knn(target_X)
-#         D_target = D_target / D_target.mean([1, 2], keepdim=True)
+        D_target = self._distance_knn(target_X)
+        D_target = D_target / D_target.mean([1, 2], keepdim=True)
         
-#         print(f"D_model.shape={D_model.shape}, D_target.shape={D_target.shape}")
+        print(f"D_model.shape={D_model.shape}, D_target.shape={D_target.shape}")
         
-#         T_gw, D_gw = self.optimize_couplings_gw(D_model, D_target)
-#         self.T_gw = T_gw.clone().detach().cpu()
-#         return
+        T_gw, D_gw = self.optimize_couplings_gw(D_model, D_target)
+        self.T_gw = T_gw.clone().detach().cpu()
+        return
     
-#     def _distance_knn(self, X):
-#         X_np = X.cpu().data.numpy()
-#         D = np.sqrt(
-#             ((X_np[:, :, np.newaxis, :] - X_np[:, np.newaxis, :, :]) ** 2).sum(-1)
-#         )
+    def _distance_knn(self, X):
+        X_np = X.cpu().data.numpy()
+        D = np.sqrt(
+            ((X_np[:, :, np.newaxis, :] - X_np[:, np.newaxis, :, :]) ** 2).sum(-1)
+        )
 
-#         # Distance cutoff
-#         D_cutoff = np.mean(np.sort(D[0, :, :], axis=-1)[:, 12])
-#         D[D > D_cutoff] = 10.0 * np.max(D)
-#         D = shortest_path(D[0, :, :])[np.newaxis, :, :]
-#         D = torch.Tensor(D).float().to(X.device)
-#         return D
+        # Distance cutoff
+        D_cutoff = np.mean(np.sort(D[0, :, :], axis=-1)[:, 12])
+        D[D > D_cutoff] = 10.0 * np.max(D)
+        D = shortest_path(D[0, :, :])[np.newaxis, :, :]
+        D = torch.Tensor(D).float().to(X.device)
+        return D
     
-#     def _distance(self, X_i, X_j):
-#         # print(f"X_i.shape={X_i.shape}, X_j.shape={X_j.shape}")
-#         dX = X_i.unsqueeze(2) - X_j.unsqueeze(1)
-#         D = torch.sqrt((dX**2).sum(-1) + 1e-6)
-#         return D
+    def _distance(self, X_i, X_j):
+        # print(f"X_i.shape={X_i.shape}, X_j.shape={X_j.shape}")
+        dX = X_i.unsqueeze(2) - X_j.unsqueeze(1)
+        D = torch.sqrt((dX**2).sum(-1) + 1e-6)
+        return D
     
     
-#     def compute(self, xyz):
-#         target_X = self.target_X
-#         monomerlen = self.monomerlen
-#         monomer_X = xyz[None,:,1] # Ca
+    def compute(self, xyz):
+        target_X = self.core
+        monomer_X = xyz[None,:,1] # Ca
         
-#         def _center(_X):
-#             _X = _X - _X.mean(1, keepdim=True)
-#             return _X
+        def _center(_X):
+            _X = _X - _X.mean(1, keepdim=True)
+            return _X
         
-#         target_X = _center(target_X)
-#         monomer_X = _center(monomer_X)
+        target_X = _center(target_X)
+        monomer_X = _center(monomer_X)
         
-#         D_inter = self._distance(target_X, monomer_X)
+        D_inter = self._distance(target_X, monomer_X)
         
-#         T_w = self.optimize_couplings_sinkhorn(D_inter)
-#         T_w = T_w + self.T_gw.permute(0,2,1) * 0.4
-#         T_w = T_w / T_w.sum([-1, -2], keepdims=True)
-#         D_w = (T_w * D_inter).sum([-1, -2])
+        T_w = self.optimize_couplings_sinkhorn(D_inter)
+        T_w = T_w + self.T_gw.permute(0,2,1) * 0.4
+        T_w = T_w / T_w.sum([-1, -2], keepdims=True)
+        D_w = (T_w * D_inter).sum([-1, -2]).squeeze()
         
-#         print(f"GW distance={D_w}")
-#         return - self.weight * D_w
+        print(f"GW DISTANCE: {D_w}")
+        return - self.weight * D_w
 
 # class monomer_chamfer_distance(Potential):
 #     """
@@ -1208,7 +1210,7 @@ implemented_potentials = { 'monomer_ROG':          monomer_ROG,
                            'shell_nearest_monomer_distance': shell_nearest_monomer_distance,
                            'shell_nearest_binder_distance': shell_nearest_binder_distance,
                         #    'binder_shape':   binder_shape,
-                        #    'monomer_shape':   monomer_shape,
+                           'monomer_shape':   monomer_shape,
                         #    'monomer_chamfer_distance': monomer_chamfer_distance,
                         #    'binder_chamfer_distance': binder_chamfer_distance,
                            }
@@ -1231,6 +1233,7 @@ require_voxel_path      = { 'monomer_shell_ncontacts',
                             'binder_shell_ncontacts',
                             'shell_nearest_monomer_distance',
                             'shell_nearest_binder_distance',
+                            'monomer_shape',
 }
 
 require_target_pdb_path = { 'binder_shell_ncontacts',

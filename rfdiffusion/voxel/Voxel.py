@@ -3,7 +3,7 @@ import numpy as np
 import json
 
 class VoxelGrid:
-    def __init__(self, voxel_path, resolution=1, cutoff=0, shell=True, N_center=np.array([0,0,0]), target_to_pdb=True):
+    def __init__(self, voxel_path, resolution=1, cutoff=0, shell=True, N_center=np.array([0,0,0]), target_to_pdb=True, centered=False):
         """Initialize VoxelGrid from JSON file using memory-efficient techniques"""
         with open(voxel_path, "r") as f:
             data = json.load(f)
@@ -23,8 +23,16 @@ class VoxelGrid:
         
         self.target_xyzs = self.get_target_xyz_vectorized(shell=shell)
         prefix = 'shell' if shell else 'core'
-        out_path = voxel_path.replace('.voxel',f'.{prefix}_c{cutoff}.pdb')
         
+        self.centered = centered
+        
+        if centered:
+            # center the targets so their center-of-mass is at the origin
+            self.com = self.target_xyzs.mean(dim=0, keepdim=True)
+            self.target_xyzs = self.target_xyzs - self.com
+            prefix += '_centered'
+        
+        out_path = voxel_path.replace('.voxel',f'.{prefix}_c{cutoff}.pdb')
         if target_to_pdb:
             self._to_pdb(self.target_xyzs, out_path)
     
@@ -80,6 +88,10 @@ class VoxelGrid:
     def is_outside(self, point):
         """Check if a given point is inside the shell."""
         point = point.detach().numpy()
+        if self.centered:
+            # If the grid was centered, shift back by the saved center-of-mass
+            point = point + self.com.squeeze().cpu().numpy()
+        # Compute voxel indices
         voxel_index = ((np.array(point) - self.centered_voxel_origin) / self.voxel_size).astype(int)
         
         x, y, z = voxel_index
