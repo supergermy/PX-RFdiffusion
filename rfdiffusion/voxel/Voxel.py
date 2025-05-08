@@ -28,6 +28,7 @@ class VoxelGrid:
         
         if centered:
             # center the targets so their center-of-mass is at the origin
+            print('Centering the targets to the voxel com')
             self.com = self.target_xyzs.mean(dim=0, keepdim=True)
             self.target_xyzs = self.target_xyzs - self.com
             prefix += '_centered'
@@ -134,3 +135,17 @@ class VoxelGrid:
         print(out_path)
                 # f.write(f'ATOM      1  CA  ALA A   1    {xxx:8.3f}{yyy:8.3f}{zzz:8.3f}  1.00  0.00           C\n')
         return
+    
+    def random_sample(self, n_samples=1):
+        """Randomly sample points from the voxel grid."""
+        xT = torch.zeros((n_samples, 14, 3), dtype=torch.float32)
+        indices = np.random.choice(len(self.target_xyzs), size=n_samples, replace=False)
+        ca = self.target_xyzs[indices]
+        n = ca + torch.tensor([-0.5272, 1.3593, 0.000])
+        c = ca + torch.tensor([1.5233, 0.000, 0.000])
+        
+        xT[:, 0, :] = ca
+        xT[:, 1, :] = n
+        xT[:, 2, :] = c
+        
+        return xT

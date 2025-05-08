@@ -23,7 +23,7 @@ inference:
   model_directory_path: null
   
   voxel_path: null
-  voxel_noise: False
+  use_voxel_com: False
 
 contigmap:
   contigs: null

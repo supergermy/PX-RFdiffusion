@@ -471,13 +471,15 @@ class binder_shell_ncontacts(Potential):
         d_0=1,
         r_0=10, 
         cutoff=0,
+        centered=False,
     ):
+        print("INITIALIZING POTENTIAL: BINDER SHELL NCONTACTS")
         target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
         # Zero-center positions
         N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
         self.binderlen = binderlen
         self.weight=weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff)
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
         self.r_0 = r_0
         self.d_0 = d_0
@@ -551,6 +553,7 @@ class monomer_shell_ncontacts(Potential):
         cutoff=0,
         centered=True,
     ):
+        print("INITIALIZING POTENTIAL: MONOMER SHELL NCONTACTS")
         self.weight=weight
         self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
@@ -714,10 +717,13 @@ class shell_nearest_monomer_distance(Potential):
         resolution=1,
         cutoff=0,
         centered=True,
+        min_dist=0,
     ):
+        print("INITIALIZING POTENTIAL: SHELL NEAREST MONOMER DISTANCE")
         self.weight = weight
         self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
+        self.min_dist = min_dist
         
     def compute(self, xyz):
         # Only look at monomer Ca residues
@@ -727,6 +733,8 @@ class shell_nearest_monomer_distance(Potential):
         dgram = torch.cdist(Ca[None,...].contiguous(), self.shell[None,...].contiguous(), p=2) # [1,Lb,Ns]
         # Get the minimum distance to the monomer
         min_dgram, _ = torch.min(dgram, dim=1)
+        min_dgram = min_dgram.squeeze()
+        min_dgram = min_dgram[min_dgram >= self.min_dist]
         
         #Potential is the sum of values in the tensor
         min_dgram = min_dgram.sum()
@@ -743,13 +751,15 @@ class shell_nearest_binder_distance(Potential):
         target_pdb_path,
         resolution=1,
         cutoff=0,
+        centered=False,
     ):
+        print("INITIALIZING POTENTIAL: SHELL NEAREST BINDER DISTANCE")
         target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
         # Zero-center positions
         N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
         self.binderlen = int(binderlen)
         self.weight = weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff)
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=bool(centered))
         self.shell = self.voxel.target_xyzs
         
     def compute(self, xyz):

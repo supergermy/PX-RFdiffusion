@@ -118,6 +118,7 @@ class PotentialManager:
 
                 if setting['type'] in potentials.require_voxel_path:
                     setting['voxel_path'] = self.inference_config.voxel_path
+                    setting['centered'] = self.inference_config.use_voxel_com
 
         self.potentials_to_apply = self.initialize_all_potentials(setting_list)
         self.T = diffuser_config.T
@@ -197,17 +198,32 @@ class PotentialManager:
         
         '''
         
+        def valley(t):
+            if t < self.T/2:
+                return 2 * self.guide_scale * t / self.T
+            else:
+                return 2 * self.guide_scale * (t - self.T) / self.T
+
+        def tide(t):
+            if t > self.T/2:
+                return self.guide_scale * (t - self.T)**2 / self.T**2
+            else:
+                return self.guide_scale * (1 - (t - self.T/2)**2 / (self.T/2)**2)
+
         implemented_decay_types = {
                 'constant': lambda t: self.guide_scale,
                 # Linear interpolation with y2: 0, y1: guide_scale, x2: 0, x1: T, x: t
                 'linear'  : lambda t: t/self.T * self.guide_scale,
                 'quadratic' : lambda t: t**2/self.T**2 * self.guide_scale,
-                'cubic' : lambda t: t**3/self.T**3 * self.guide_scale
+                'cubic' : lambda t: t**3/self.T**3 * self.guide_scale,
+                'valley' : valley,
+                'tide' : tide,
+                'half' : lambda t: self.guide_scale if t < self.T/2 else 0,
         }
-        
+
         if self.guide_decay not in implemented_decay_types:
             sys.exit(f'decay_type must be one of {implemented_decay_types.keys()}. Received decay_type={self.guide_decay}. Exiting.')
-        
+
         return implemented_decay_types[self.guide_decay](t)
 
 
