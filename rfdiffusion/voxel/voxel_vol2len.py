@@ -20,7 +20,7 @@ def voxel_vol2len(voxel_path, cutoff):
         tuple: A tuple containing the suggested minimum and maximum lengths, and the total volume.
     """
     # Initialize VoxelGrid
-    count = VoxelGrid(voxel_path, resolution=2, cutoff=cutoff, shell=False, N_center=np.array([0, 0, 0]), target_to_pdb=False, centered=False).target_xyzs.shape[0]
+    count = VoxelGrid(voxel_path, resolution=2, cutoff=cutoff, shell=False, target_to_pdb=False).target_xyzs.shape[0]
     
     # Calculate total volume
     total_vol = count * 8 # 8 A^3 per voxel (w/ resolution 2 A), faster than 1 A^3 (w/ resolution 1 A) with little loss of accuracy
