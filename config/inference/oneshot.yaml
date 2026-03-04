@@ -69,13 +69,13 @@ model:
   use_motif_timestep: False
 
 diffuser:
-  T: 10
+  T: 50
   b_0: 1e-2
   b_T: 7e-2
   schedule_type: linear
   so3_type: igso3
   crd_scale: 0.25
-  partial_T: 2
+  partial_T: 7
   so3_schedule_type: linear
   min_b: 1.5
   max_b: 2.5

@@ -917,8 +917,9 @@ class monomer_shape(Potential):
         voxel_path,
         resolution=1,
         cutoff=0,
+        centered=True,
     ):
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, shell=False)
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered), shell=False)
         self.core = self.voxel.target_xyzs
             
         self.monomerlen = int(monomerlen)

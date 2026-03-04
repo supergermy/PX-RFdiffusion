@@ -514,6 +514,8 @@ def sampler_selector(conf: DictConfig):
         elif conf.inference.model_runner == "OneShotSampler":
             sampler = model_runners.OneShotSampler(conf)
             conf.inference.output_prefix = f"./{conf.inference.input_pdb.split('/')[-1].replace('.pdb','_oneshot')}"
+        elif conf.inference.model_runner == "VoxelSampler":
+            sampler = model_runners.VoxelSampler(conf)
         else:
             raise ValueError(f"Unrecognized sampler {conf.model_runner}")
     return sampler
@@ -620,7 +622,7 @@ def process_target(pdb_path, parse_hetatom=False, center=True, voxel_center=None
     # Zero-center positions
     ca_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True)
     
-    if voxel_center:
+    if voxel_center is not None:
         ca_center = voxel_center
     
     if not center:

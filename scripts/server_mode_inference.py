@@ -48,7 +48,7 @@ def main(conf: HydraConfig) -> None:
         if os.path.exists(new_input):
             # Update the input PDB path
             sampler.inf_conf.input_pdb = new_input
-            sampler.inf_conf.output_prefix = f"{new_input.split('/')[-1].replace('.pdb','_fixed')}"
+            sampler.inf_conf.output_prefix = f"{new_input.split('/')[-1].replace('.pdb',f'_T{sampler.t_step_input}')}"
             log.info(f"Processing new input PDB: {new_input}")
 
             # Main design loop
