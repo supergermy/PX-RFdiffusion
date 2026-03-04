@@ -25,9 +25,9 @@ def voxel_vol2len(voxel_path, cutoff):
     # Calculate total volume
     total_vol = count * 8 # 8 A^3 per voxel (w/ resolution 2 A), faster than 1 A^3 (w/ resolution 1 A) with little loss of accuracy
     
-    # Suggest range based on total volume, Hyemi's formula. Drop decimal part
-    min_n = int((total_vol + 5110) / 167)
-    max_n = int((total_vol + 5060) / 152)
+    # Suggest range based on total volume, Hyemi's formula2. Drop decimal part
+    min_n = int((total_vol + 4724) / 186)
+    max_n = int((total_vol + 4747) / 179)
     
     return min_n, max_n, total_vol
 
