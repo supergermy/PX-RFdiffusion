@@ -474,12 +474,14 @@ class binder_shell_ncontacts(Potential):
         centered=False,
     ):
         print("INITIALIZING POTENTIAL: BINDER SHELL NCONTACTS")
-        target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
-        # Zero-center positions
-        N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
+        N_center = np.array([0,0,0])
+        if centered:
+            target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
+            # Zero-center positions
+            N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
         self.binderlen = binderlen
         self.weight=weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=bool(centered))
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=False)
         self.shell = self.voxel.target_xyzs
         self.r_0 = r_0
         self.d_0 = d_0
@@ -552,10 +554,15 @@ class monomer_shell_ncontacts(Potential):
         r_0=10, 
         cutoff=0,
         centered=True,
+        target_pdb_path=None,
     ):
         print("INITIALIZING POTENTIAL: MONOMER SHELL NCONTACTS")
         self.weight=weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
+        N_center = np.array([0,0,0])
+        if centered and target_pdb_path:
+            target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
+            N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=False)
         self.shell = self.voxel.target_xyzs
         self.r_0 = r_0
         self.d_0 = d_0
@@ -718,10 +725,15 @@ class shell_nearest_monomer_distance(Potential):
         cutoff=0,
         centered=True,
         min_dist=0,
+        target_pdb_path=None,
     ):
         print("INITIALIZING POTENTIAL: SHELL NEAREST MONOMER DISTANCE")
         self.weight = weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, centered=bool(centered))
+        N_center = np.array([0,0,0])
+        if centered and target_pdb_path:
+            target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
+            N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=False)
         self.shell = self.voxel.target_xyzs
         self.min_dist = min_dist
         
@@ -754,12 +766,14 @@ class shell_nearest_binder_distance(Potential):
         centered=False,
     ):
         print("INITIALIZING POTENTIAL: SHELL NEAREST BINDER DISTANCE")
-        target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
-        # Zero-center positions
-        N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
+        N_center = np.array([0,0,0])
+        if centered:
+            target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
+            # Zero-center positions
+            N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
         self.binderlen = int(binderlen)
         self.weight = weight
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=bool(centered))
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, centered=False)
         self.shell = self.voxel.target_xyzs
         
     def compute(self, xyz):
@@ -917,8 +931,14 @@ class monomer_shape(Potential):
         voxel_path,
         resolution=1,
         cutoff=0,
+        centered=False,
+        target_pdb_path=None,
     ):
-        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), cutoff=cutoff, shell=False)
+        N_center = np.array([0,0,0])
+        if centered and target_pdb_path:
+            target_struct = iu.parse_pdb(target_pdb_path, parse_hetatom=True) # [Lr,14,3]
+            N_center = target_struct["xyz"][:, :1, :].mean(axis=0, keepdims=True) # [1,1,3]
+        self.voxel = VoxelGrid(voxel_path=voxel_path, resolution=int(resolution), N_center=N_center, cutoff=cutoff, shell=False, centered=False)
         self.core = self.voxel.target_xyzs
             
         self.monomerlen = int(monomerlen)

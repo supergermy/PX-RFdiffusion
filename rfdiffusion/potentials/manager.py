@@ -119,6 +119,8 @@ class PotentialManager:
                 if setting['type'] in potentials.require_voxel_path:
                     setting['voxel_path'] = self.inference_config.voxel_path
                     setting['centered'] = self.inference_config.use_voxel_com
+                    if self.inference_config.use_voxel_com:
+                        setting['target_pdb_path'] = self.inference_config.input_pdb
 
         self.potentials_to_apply = self.initialize_all_potentials(setting_list)
         self.T = diffuser_config.T
